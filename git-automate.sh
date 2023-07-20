@@ -1,3 +1,79 @@
+
+RESET="\e[0m"
+BLACK="\e[30m"
+RED="\e[31m"
+GREEN="\e[32m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+MAGENTA="\e[35m"
+CYAN="\e[36m"
+WHITE="\e[37m"
+
+BRIGHT_BLACK="\e[90m"
+BRIGHT_RED="\e[91m"
+BRIGHT_GREEN="\e[92m"
+BRIGHT_YELLOW="\e[93m"
+BRIGHT_BLUE="\e[94m"
+BRIGHT_MAGENTA="\e[95m"
+BRIGHT_CYAN="\e[96m"
+BRIGHT_WHITE="\e[97m"
+
+BG_BLACK="\e[40m"
+BG_RED="\e[41m"
+BG_GREEN="\e[42m"
+BG_YELLOW="\e[43m"
+BG_BLUE="\e[44m"
+BG_MAGENTA="\e[45m"
+BG_CYAN="\e[46m"
+BG_WHITE="\e[47m"
+
+BG_BRIGHT_BLACK="\e[100m"
+BG_BRIGHT_RED="\e[101m"
+BG_BRIGHT_GREEN="\e[102m"
+BG_BRIGHT_YELLOW="\e[103m"
+BG_BRIGHT_BLUE="\e[104m"
+BG_BRIGHT_MAGENTA="\e[105m"
+BG_BRIGHT_CYAN="\e[106m"
+BG_BRIGHT_WHITE="\e[107m"
+
+CURSOR_UP="\e[A"
+CURSOR_DOWN="\e[B"
+CURSOR_FORWARD="\e[C"
+CURSOR_BACK="\e[D"
+CURSOR_NEXT_LINE="\e[E"
+CURSOR_PREV_LINE="\e[F"
+CURSOR_COLUMN="\e[G"
+CURSOR_POSITION="\e[{row};{col}H"
+CURSOR_SAVE="\e[s"
+CURSOR_RESTORE="\e[u"
+CURSOR_HIDE="\e[?25l"
+CURSOR_SHOW="\e[?25h"
+
+BOLD="\e[1m"
+DIM="\e[2m"
+ITALIC="\e[3m"
+UNDERLINE="\e[4m"
+BLINK="\e[5m"
+FAST_BLINK="\e[6m"
+REVERSE="\e[7m"
+HIDDEN="\e[8m"
+CROSSED="\e[9m"
+FRAMED="\e[51m"
+ENCIRCLED="\e[52m"
+OVERLINED="\e[53m"
+
+CLEAR_SCREEN="\e[2J"
+CLEAR_LINE="\e[2K"
+CLEAR_LINE_FROM_CURSOR="\e[1K"
+CLEAR_LINE_TO_CURSOR="\e[0K"
+ENABLE_ALTERNATE_SCREEN="\e[?1049h"
+DISABLE_ALTERNATE_SCREEN="\e[?1049l"
+SET_TITLE="\e]0;{title}\a"
+BELL="\a"
+CARRIAGE_RETURN="\r"
+NEWLINE="\n"
+TAB="\t"
+
 menu_list=(
     "Show Commits"
     "Staging Area"
@@ -21,12 +97,12 @@ function set_terminal_dimensions() {
 }
 
 function highlight_item() {
-    printf "\e[1m\e[33m%s\e[0m" "$1"
+    printf "$BOLD$YELLOW%s$RESET" "$1"
 }
 
 function reset_terminal() {
-    printf "\e[0m"
-    stty echo
+    printf "$RESET"
+    printf "$CURSOR_SHOW"
 }
 
 function draw_menu() {
@@ -50,33 +126,44 @@ function draw_menu() {
 
 function draw_panel() {
     local content="$1"
-    local panel_width=$((COLUMNS - 20)) # Adjust the width to leave space for the borders and padding
-    local panel_height=$((LINES - 2))   # Adjust the height to leave space for the top and bottom borders
+    local panel_width=$((COLUMNS - 20)) # adjust the width to leave space for the borders and padding
+    local panel_height=$((LINES - 4))   # adjust the height to leave space for the top and bottom borders
 
-    # Function to repeat a character
-    repeat_char() {
+    horizontal_line() {
         local char="$1"
         local times=$2
-        printf "%0.s$char" $(seq 1 "$times")
+        if ((panel_width % 2 == 0)); then
+            printf "%0.s$char" $(seq 1 "$times")
+        else # accounting for odd numbers
+            printf "%0.s$char" $(seq 1 "$((times + 1))")
+        fi
     }
 
-    print_vertical_line() {
+    vertical_line() {
         local char="$1"
-        local padding=$((panel_width+1))
+        local padding=$((panel_width))
         printf "\e[19C%s%*s%s\n" "$char" "$padding" "$char"
     }
 
-    printf "╭%s╮\n" "$(repeat_char "─" "$((panel_width - 2))")"
+    printf "╭%s╮\n" "$(horizontal_line "─" "$((panel_width - 4))")"
     title="GIT AUTOMATE"
-    title_len=${#title}
-    printf "\e[19C%*s%*s\n" "$((panel_width / 2 + title_len / 2))" "$title" "$((panel_width / 2 - title_len / 2))" ""
+    title_len=0
+    if ((${#title_len} % 2 == 0)); then
+        title_len=${#title}
+    else
+        title_len=$((${#title} - 1))
+    fi
+    # TODO: fix border alignment
+    local left_padding=$((panel_width / 2 + title_len / 2))
+    local right_padding=$((panel_width / 2 - title_len / 2 - 1 - (panel_width % 2)))
+    printf "\e[19C│%*s%*s│\n" "$left_padding" "$title" "$right_padding" ""
 
-    local lines_to_print=$((panel_height - 3)) # Calculate how many vertical lines to print (excluding top and bottom borders and title lines)
+    local lines_to_print=$((panel_height - 3)) # calculate how many vertical lines to print (excluding top and bottom borders and title lines)
     for ((i = 0; i < lines_to_print; i++)); do
-        print_vertical_line "│"
+        vertical_line "│"
     done
 
-    printf "\e[19C╰%s╯\n" "$(repeat_char "─" "$((panel_width - 2))")"
+    printf "\e[19C╰%s╯\n" "$(horizontal_line "─" "$((panel_width - 4))")"
 }
 
 function handle_resize() {
@@ -85,7 +172,7 @@ function handle_resize() {
 }
 
 function redraw_menu() {
-    printf "\e[2J\e[?25l"
+    printf "$CLEAR_SCREEN$CURSOR_HIDE"
     printf "\e[0;0H"
     stty -echo
 
@@ -94,9 +181,9 @@ function redraw_menu() {
         if [[ $i -eq $selected ]]; then
             highlight_item "$(draw_menu "➤ ${menu_list[i]}")"
         else
-            printf "\e[2m"
+            printf "$DIM"
             draw_menu "${menu_list[i]}"
-            printf "\e[0m"
+            printf "$RESET"
         fi
     done
 
