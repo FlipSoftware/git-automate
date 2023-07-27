@@ -147,7 +147,7 @@ fn test_git_simple_commit() -> miette::Result<()> {
 #[test]
 fn test_git_semantic_commit_fail() -> miette::Result<()> {
     // Command from the library to test
-    let commit = git_semantic_commit(&[], false);
+    let commit = git_semantic_commit(&[], "fix", "new_file", false);
     assert!(commit.is_err(), "git commit should fail");
 
     assert_eq!(
@@ -164,27 +164,23 @@ fn test_git_semantic_commit() -> miette::Result<()> {
     prepare_test(workdir, Some(file))?;
 
     // Command from the library to test
-    let commit = git_semantic_commit(&["fix (new_file): add fix for new_file"], false);
+    let commit = git_semantic_commit(&["add fix for new_file"], "fix", "new_file", false);
     assert!(commit.is_ok(), "git commit failed");
 
-    assert!(commit
-        .unwrap()
-        .contains("fix (new_file): add fix for new_file"));
+    assert_eq!(commit.unwrap(), "fix (new_file): add fix for new_file");
     Ok(())
 }
 
 #[test]
-fn test_git_semanti_commit_emphasized() -> miette::Result<()> {
+fn test_git_semantic_commit_emphasized() -> miette::Result<()> {
     let workdir = "test_git_semantic_commit";
     let file = "new_file.txt";
     prepare_test(workdir, Some(file))?;
 
     // Command from the library to test
-    let commit = git_semantic_commit(&["`fix` (`new_file`): add fix for new_file"], true);
+    let commit = git_semantic_commit(&["add fix for new_file"], "fix", "new_file", true);
     assert!(commit.is_ok(), "git commit failed");
 
-    assert!(commit
-        .unwrap()
-        .contains("`fix` (`new_file`): add fix for new_file"));
+    assert_eq!(commit.unwrap(), "`fix` (`new_file`): add fix for new_file");
     Ok(())
 }
