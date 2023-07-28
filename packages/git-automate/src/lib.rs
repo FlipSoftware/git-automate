@@ -39,14 +39,9 @@ pub fn git_stash(args: &[&str]) -> Result<String, fail::IOFail> {
 
 pub fn git_simple_commit(args: &[&str]) -> Result<String, fail::IOFail> {
     if args.is_empty() {
-        return Err(fail::IOFail {
-            message: "\n\nMessage can not be empty\n\n",
-        });
+        return Err(fail::IOFail { message: "\n\nMessage can not be empty\n\n" });
     }
-    git_command(
-        &[&["commit", "--message"], args].concat(),
-        "git commit failed",
-    )
+    git_command(&[&["commit", "--message"], args].concat(),"git commit failed")
 }
 
 pub fn git_semantic_commit(

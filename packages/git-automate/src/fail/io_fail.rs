@@ -5,7 +5,11 @@ pub struct IOFail {
 
 impl From<std::io::Error> for IOFail {
     fn from(value: std::io::Error) -> Self {
-        Self { message: format_args!("\nStderr returned: {value}\n").as_str().unwrap() }
+        Self {
+            message: format_args!("\nStderr returned: {value}\n")
+                .as_str()
+                .unwrap(),
+        }
     }
 }
 

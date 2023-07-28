@@ -3,41 +3,71 @@ name: Rust CI Suite
 on:
   [push, pull_request]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  clippy:
+    if: github.event.pull_request.draft == false
+    name: Cargo Clippy
     runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup component add clippy
+      - uses: actions/checkout@v3
+      - run: cargo clippy --workspace --tests -- -D warnings
+
+  fmt:
+    if: github.event.pull_request.draft == false
+    name: Ensure rustfmt Standard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: rustup component add rustfmt
+      - uses: actions/checkout@v3
+      - run: cargo fmt --all --verbose
+
+  matrix_test:
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+              toolchain: '1.71.0',
+              cross: false,
+              command: 'test',
+              args: '--all --tests'
+            }
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-latest,
+              toolchain: '1.71.0',
+              cross: false,
+              command: 'test',
+              args: '--all --tests'
+            }
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-
-    - name: Set up Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: stable
-
-    - name: Cache dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cargo
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-    - name: Install Dependencies
-      run: cargo build --locked
-
-    - name: Run Clippy
-      run: cargo clippy --all --all-targets --all-features -- -D warnings
-
-    - name: Format Code
-      run: cargo fmt --all -- --check
-
-    - name: Run Tests
-      run: cargo test --all --locked
-
-    - name: Generate Code Coverage
-      run: |
-        cargo tarpaulin --out Xml
-        bash <(curl -s https://codecov.io/bash)
-
-    - name: Check Code Coverage
-      run: cargo tarpaulin --all --locked --exclude-files "tests/**"
+      - uses: actions/checkout@v3
+      - name: install rustup stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.platform.toolchain }}
+          target: ${{ matrix.platform.target }}
+          override: true
+          default: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: git-automate -> ../target
+          save-if: ${{ matrix.features.key == 'all' }}
+      - name: test
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.platform.cross }}
+          command: ${{ matrix.platform.command }}
+          args: --target ${{ matrix.platform.target }} ${{ matrix.platform.args }}
