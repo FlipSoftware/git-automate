@@ -46,9 +46,9 @@ fn test_git_status_yet_to_commit() -> miette::Result<()> {
     let status = git_status(&["--short", "--branch"]);
     assert!(status.is_ok(), "git status failed");
 
-    let branch = test_git_command(&["branch", "--show-current"])?;
-    assert!(branch.status.success(), "git branch failed");
-    let branch = std::str::from_utf8(&branch.stdout).into_diagnostic()?;
+    let branch = git_branch(&["--show-current"]);
+    assert!(branch.is_ok(), "git branch failed");
+    let branch = branch.unwrap();
 
     let expected_status = format!("## No commits yet on {branch}A  {file}\n");
     assert_eq!(status.unwrap(), expected_status);
@@ -60,15 +60,15 @@ fn test_git_status_clean_tree() -> miette::Result<()> {
     let (workdir, file) = ("test_git_status", "new_file.txt");
     prepare_test(workdir, Some(file))?;
 
-    let commit = test_git_command(&["commit", "-m", "Initial commit"])?;
-    assert!(commit.status.success(), "git commit failed");
+    let commit = git_simple_commit(&["Initial commit"]);
+    assert!(commit.is_ok(), "git commit failed");
     // Command from the library to test
     let status = git_status(&["--branch"]);
     assert!(status.is_ok(), "git status failed");
 
-    let branch = test_git_command(&["branch", "--show-current"])?;
-    assert!(branch.status.success(), "git branch failed");
-    let branch = std::str::from_utf8(&branch.stdout).into_diagnostic()?;
+    let branch = git_branch(&["--show-current"]);
+    assert!(branch.is_ok(), "git branch failed");
+    let branch = branch.unwrap();
 
     let expected_status = format!("On branch {branch}nothing to commit, working tree clean\n");
     assert_eq!(status.unwrap(), expected_status);
@@ -80,8 +80,8 @@ fn test_git_log() -> miette::Result<()> {
     let (workdir, file) = ("test_git_log", "new_file.txt");
     prepare_test(workdir, Some(file))?;
 
-    let commit = test_git_command(&["commit", "-m", "Initial commit"])?;
-    assert!(commit.status.success(), "git commit failed");
+    let commit = git_simple_commit(&["Initial commit"]);
+    assert!(commit.is_ok(), "git commit failed");
     // Command from the library to test
     let log = git_log(&["--oneline", "--max-count=1"]);
     assert!(log.is_ok(), "git log failed");
