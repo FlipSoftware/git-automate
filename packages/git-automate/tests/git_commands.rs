@@ -1,13 +1,12 @@
-use std::process::Output;
-
 use miette::IntoDiagnostic;
+use std::process::Output;
 
 use git_automate::*;
 
 // * Helper function to prepare execution before each test
 fn prepare_test(workdir: &str, file: Option<&str>) -> miette::Result<()> {
     let file = file.unwrap_or_default();
-    std::env::set_current_dir("/var/tmp").into_diagnostic()?;
+    std::env::set_current_dir("/tmp").into_diagnostic()?;
     miette::set_panic_hook();
 
     if std::fs::read_dir(workdir).is_ok() {
@@ -22,7 +21,7 @@ fn prepare_test(workdir: &str, file: Option<&str>) -> miette::Result<()> {
         let output = std::fs::write(file_path, "Hello world!");
         assert!(output.is_ok(), "writing to file failed");
 
-        std::env::set_current_dir(format!("/var/tmp/{workdir}")).into_diagnostic()?;
+        std::env::set_current_dir(format!("/tmp/{workdir}")).into_diagnostic()?;
 
         let stage_files = test_git_command(&["add", "."])?;
         assert!(stage_files.status.success(), "add to staging failed");
@@ -117,7 +116,7 @@ fn test_git_stage_all() -> miette::Result<()> {
     let workdir = "test_git_add_all";
     prepare_test(workdir, None)?;
 
-    let curr_dir = std::env::current_dir().unwrap(); // -> /var/tpm
+    let curr_dir = std::env::current_dir().unwrap(); // -> /tmp
     let curr_dir = curr_dir.to_str().unwrap();
     let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
     assert!(change_dir.is_ok(), "change directory failed");
@@ -142,7 +141,7 @@ fn test_git_stage_single_file() -> miette::Result<()> {
     let workdir = "test_git_add_single";
     prepare_test(workdir, None)?;
 
-    let curr_dir = std::env::current_dir().unwrap(); // -> /var/tpm
+    let curr_dir = std::env::current_dir().unwrap(); // -> /tmp
     let curr_dir = curr_dir.to_str().unwrap();
     let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
     assert!(change_dir.is_ok(), "change directory failed");
@@ -164,7 +163,7 @@ fn test_git_stage_restore_all() -> miette::Result<()> {
     let workdir = "test_git_restore_all";
     prepare_test(workdir, None)?;
 
-    let curr_dir = std::env::current_dir().unwrap(); // -> /var/tpm
+    let curr_dir = std::env::current_dir().unwrap(); // -> /tmp
     let curr_dir = curr_dir.to_str().unwrap();
     let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
     assert!(change_dir.is_ok(), "change directory failed");
@@ -195,7 +194,7 @@ fn test_git_stage_restore_single_file() -> miette::Result<()> {
     let workdir = "test_git_restore_single";
     prepare_test(workdir, None)?;
 
-    let curr_dir = std::env::current_dir().unwrap(); // -> /var/tpm
+    let curr_dir = std::env::current_dir().unwrap(); // -> /tmp
     let curr_dir = curr_dir.to_str().unwrap();
     let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
     assert!(change_dir.is_ok(), "change directory failed");
