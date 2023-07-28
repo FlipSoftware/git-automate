@@ -1,2 +1,2 @@
-pub mod fail;
-pub use fail::*;
+pub mod io_fail;
+pub use io_fail::*;
