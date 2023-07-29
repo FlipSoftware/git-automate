@@ -1,0 +1,5 @@
+[workspace]
+members = ["packages/git-automate"]
+
+[workspace.dependencies]
+miette = "*"
