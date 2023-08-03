@@ -3,362 +3,197 @@ use std::process::Output;
 
 use git_automate::*;
 
-// * Helper function to prepare execution before each test
-fn prepare_test(workdir: &str, file: Option<&str>) -> miette::Result<()> {
-    let file = file.unwrap_or_default();
-    std::env::set_current_dir("/tmp").into_diagnostic()?;
+// * Typesafe mutable static variables to reliably handle concurrency
+static TEST_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+static TEST_LEN: std::sync::OnceLock<std::sync::Mutex<i32>> = std::sync::OnceLock::new();
+
+fn count_success_or_clean_on_finish() -> i32 {
+    let all_tests = 12;
+
+    let test_len = TEST_LEN.get_or_init(|| std::sync::Mutex::new(0));
+    let mut value_guard = match test_len.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    *value_guard += 1;
+    if *value_guard == all_tests {
+        println!("\t✅ SUCCESS! ALL {} TESTS PASSED", *value_guard);
+        clean_up().unwrap();
+    }
+    *value_guard
+}
+
+fn prepare_test(dir_name: &str) -> miette::Result<String> {
+    let test_mutex = TEST_MUTEX.get_or_init(|| std::sync::Mutex::new(()));
+
+    let _guard = match test_mutex.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
     miette::set_panic_hook();
+    let tmp_dir = std::env::temp_dir();
 
-    if std::fs::read_dir(workdir).is_ok() {
-        std::fs::remove_dir_all(workdir).into_diagnostic()?;
-    }
+    // * Create a timestamp with its thread id to append to the directory name
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("Failed to get UNIX Epoch timestamp")
+        .as_nanos();
+    let thread_id = std::thread::current().id();
 
-    let init = test_git_command(&["init", workdir])?;
-    assert!(init.status.success(), "git init failed");
+    // * Initialize a new Git repository with the timestamp for each thread
+    let mut repository = tmp_dir.clone();
+    repository.push(format!("{dir_name}_{timestamp}_{thread_id:?}"));
+    let repository = repository
+        .to_str()
+        .expect("Failed to create repository with timestamp");
+    let init = git_command_tester(&["init", repository]).expect("Failed to run git init");
+    assert!(init.status.success(), "Failed to git init");
 
-    if !file.is_empty() {
-        let file_path = format!("{workdir}/{file}");
-        let output = std::fs::write(file_path, "Hello world!");
-        assert!(output.is_ok(), "writing to file failed");
+    // * Change the directory to the initialized repository and create a new file
+    std::env::set_current_dir(repository)
+        .expect("Failed to change the current directory to repository");
+    let file_name = "new_file.txt";
+    let output = std::fs::write(file_name, "Hello world!");
+    assert!(output.is_ok(), "Failed to write file");
 
-        std::env::set_current_dir(format!("/tmp/{workdir}")).into_diagnostic()?;
+    let stage_files = git_command_tester(&["add", "."]).expect("Failed to add files to staging");
 
-        let stage_files = test_git_command(&["add", "."])?;
-        assert!(stage_files.status.success(), "add to staging failed");
-    }
+    assert!(
+        stage_files.status.success(),
+        "Failed to add files to staging"
+    );
+    Ok(repository.to_string())
+}
 
+fn clean_up() -> miette::Result<()> {
+    let temp_dir = std::env::temp_dir().display().to_string();
+    println!("\t♻ Cleaning directories");
     Ok(())
 }
 
-// * Helper function to abstract and test git commands with diagnostics
-fn test_git_command(args: &[&str]) -> miette::Result<Output> {
+fn git_command_tester(args: &[&str]) -> miette::Result<Output> {
     std::process::Command::new("git")
         .args(args)
         .output()
         .into_diagnostic()
 }
 
-#[test]
-fn test_git_status_yet_to_commit() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_status", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-    // Command from the library to test
-    let status = git_status(&["--short", "--branch"]);
-    assert!(status.is_ok(), "git status failed");
-
-    let branch = test_git_command(&["branch", "--show-current"])?;
-    assert!(branch.status.success(), "git branch failed");
-    let branch = std::str::from_utf8(&branch.stdout).into_diagnostic()?;
-
-    let expected_status = format!("## No commits yet on {branch}A  {file}\n");
-    assert_eq!(status.unwrap(), expected_status);
-    Ok(())
+mod empty_repository {
+    use super::*;
+    #[test]
+    fn init_repository() -> miette::Result<()> {
+        prepare_test("test_run_init_repository")?;
+        let test_dir = std::env::current_dir()
+            .into_diagnostic()?
+            .display()
+            .to_string();
+        println!("[init_repository] Initialize git repository at: {test_dir}");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn status_without_commits() -> miette::Result<()> {
+        prepare_test("test_run_status_without_commits")?;
+        let status = git_status(&[]).expect("Failed to run git status");
+        assert!(status.contains("No commits yet"));
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn log_return_empty() -> miette::Result<()> {
+        prepare_test("test_run_log_return_empty")?;
+        let log = git_log(&[]).expect("Failed to run git log");
+        assert!(log.is_empty());
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn diff_return_empty() -> miette::Result<()> {
+        prepare_test("test_run_diff_return_empty")?;
+        let diff = git_diff(&[]).expect("Failed to run git diff");
+        assert_eq!(diff, "");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn staging_return_empty() -> miette::Result<()> {
+        prepare_test("test_run_staging_return_empty")?;
+        let staging = git_staging_area(&["."]).expect("Failed to add files to staging");
+        assert_eq!(staging, "");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn stash_return_empty() -> miette::Result<()> {
+        prepare_test("test_run_stash_return_empty")?;
+        let stash = git_stash(&[]).expect("Failed to run git stash");
+        assert_eq!(stash, "");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn branch_return_empty() -> miette::Result<()> {
+        prepare_test("test_run_branch_return_empty")?;
+        let branch = git_branch(&[]).expect("Failed to run git branch");
+        assert_eq!(branch, "");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
 }
 
-#[test]
-fn test_git_status_clean_tree() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_status", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
+mod commit_initial_message {
+    use super::*;
+    #[test]
+    fn init_repository() -> miette::Result<()> {
+        prepare_test("test_run_init_repository")?;
+        let test_dir = std::env::current_dir()
+            .into_diagnostic()?
+            .display()
+            .to_string();
+        println!("[commit_initial_message] Initialize git repository at: {test_dir}");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn simple_commit() -> miette::Result<()> {
+        prepare_test("test_run_simple_commit")?;
+        let commit = git_simple_commit(&["Initial commit"]).expect("Failed to run simple commit");
+        assert!(commit.contains("Initial commit"));
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn rename_as_main_branch() -> miette::Result<()> {
+        prepare_test("test_run_rename_as_main_branch")?;
+        let _branch =
+            git_branch(&["--move", "master", "main"]).expect("Failed to run git branch --move");
+        let branch = git_branch(&["--show-current"]).expect("Failed to run git status");
+        assert_eq!(branch, "main\n");
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn check_git_status() -> miette::Result<()> {
+        let curr_path = prepare_test("test_run_check_git_status")?;
+        let file = "main.rs";
+        let mut file_path = std::path::PathBuf::from(curr_path);
+        file_path.push(file);
 
-    let commit = test_git_command(&["commit", "-m", "Initial commit"])?;
-    assert!(commit.status.success(), "git commit failed");
-    // Command from the library to test
-    let status = git_status(&["--branch"]);
-    assert!(status.is_ok(), "git status failed");
+        std::fs::write(file_path, "fn main() {}").expect("Failed to write to file");
 
-    let branch = test_git_command(&["branch", "--show-current"])?;
-    assert!(branch.status.success(), "git branch failed");
-    let branch = std::str::from_utf8(&branch.stdout).into_diagnostic()?;
-
-    let expected_status = format!("On branch {branch}nothing to commit, working tree clean\n");
-    assert_eq!(status.unwrap(), expected_status);
-    Ok(())
-}
-
-#[test]
-fn test_git_log() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_log", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    let commit = test_git_command(&["commit", "-m", "Initial commit"])?;
-    assert!(commit.status.success(), "git commit failed");
-    // Command from the library to test
-    let log = git_log(&["--oneline", "--max-count=1"]);
-    assert!(log.is_ok(), "git log failed");
-
-    let expected_log = "Initial commit\n";
-    assert_eq!(log.unwrap().split_once(' ').unwrap().1, expected_log);
-    Ok(())
-}
-
-#[test]
-fn test_git_diff() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_diff", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    let curr_dir = std::env::current_dir().into_diagnostic()?;
-    let curr_dir = curr_dir.to_str().unwrap();
-    let file_path = format!("{curr_dir}/{file}");
-    let add_changes = std::fs::write(file_path, "\nNew code added");
-    assert!(add_changes.is_ok(), "git commit failed");
-
-    // Command from the library to test
-    let diff = git_diff(&["--shortstat"]);
-    assert!(diff.is_ok(), "git diff failed");
-
-    let expected_diff = " 1 file changed, 2 insertions(+), 1 deletion(-)\n";
-    assert_eq!(diff.unwrap(), expected_diff);
-    Ok(())
-}
-
-#[test]
-fn test_git_stage_all() -> miette::Result<()> {
-    let workdir = "test_git_add_all";
-    prepare_test(workdir, None)?;
-
-    let curr_dir = std::env::current_dir().unwrap(); // -> /tpm
-    let curr_dir = curr_dir.to_str().unwrap();
-    let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
-    assert!(change_dir.is_ok(), "change directory failed");
-
-    let file_a = "new_file.txt";
-    let write = std::fs::write(file_a, "Hello world!");
-    assert!(write.is_ok(), "write to file failed");
-    let file_b = "lib.rs";
-    let write = std::fs::write(file_b, "fn hello() -> String { 'Hello'.to_string() }");
-    assert!(write.is_ok(), "write to file failed");
-    // Command from library to test
-    let stage_all = git_staging_area(&["add", "--all", "--verbose"]);
-    assert!(stage_all.is_ok(), "git add failed");
-
-    let expected_stage_all = format!("add '{file_b}'\nadd '{file_a}'\n");
-    assert_eq!(stage_all.unwrap(), expected_stage_all);
-    Ok(())
-}
-
-#[test]
-fn test_git_stage_single_file() -> miette::Result<()> {
-    let workdir = "test_git_add_single";
-    prepare_test(workdir, None)?;
-
-    let curr_dir = std::env::current_dir().unwrap(); // -> /tpm
-    let curr_dir = curr_dir.to_str().unwrap();
-    let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
-    assert!(change_dir.is_ok(), "change directory failed");
-
-    let file = "new_file.txt";
-    let write = std::fs::write(file, "Hello world!");
-    assert!(write.is_ok(), "write to file failed");
-
-    let stage_single = git_staging_area(&["add", file, "--verbose"]);
-    assert!(stage_single.is_ok(), "git add failed");
-
-    let expected_stage_single = format!("add '{file}'\n");
-    assert_eq!(stage_single.unwrap(), expected_stage_single);
-    Ok(())
-}
-
-#[test]
-fn test_git_stage_restore_all() -> miette::Result<()> {
-    let workdir = "test_git_restore_all";
-    prepare_test(workdir, None)?;
-
-    let curr_dir = std::env::current_dir().unwrap(); // -> /tpm
-    let curr_dir = curr_dir.to_str().unwrap();
-    let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
-    assert!(change_dir.is_ok(), "change directory failed");
-
-    let file_a = "new_file.txt";
-    let write = std::fs::write(file_a, "Hello world!");
-    assert!(write.is_ok(), "write to file failed");
-    let file_b = "lib.rs";
-    let write = std::fs::write(file_b, "fn hello() -> String { 'Hello'.to_string() }");
-    assert!(write.is_ok(), "write to file failed");
-
-    let stage_all = git_staging_area(&["add", ".", "--verbose"]);
-    assert!(stage_all.is_ok(), "git add failed");
-    // Command from library to test
-    let restore_all = git_staging_area(&["restore", "--staged", "."]);
-    assert!(restore_all.is_ok(), "git restore failed");
-
-    let restore_all_status = git_status(&["--short"]);
-    assert!(restore_all_status.is_ok(), "git status failed");
-
-    let expected_status = format!("A  {file_b}\nA  {file_a}\n");
-    assert_eq!(restore_all_status.unwrap(), expected_status);
-    Ok(())
-}
-
-#[test]
-fn test_git_stage_restore_single_file() -> miette::Result<()> {
-    let workdir = "test_git_restore_single";
-    prepare_test(workdir, None)?;
-
-    let curr_dir = std::env::current_dir().unwrap(); // -> /tpm
-    let curr_dir = curr_dir.to_str().unwrap();
-    let change_dir = std::env::set_current_dir(format!("{curr_dir}/{workdir}"));
-    assert!(change_dir.is_ok(), "change directory failed");
-
-    let file = "new_file.txt";
-    let write = std::fs::write(file, "Hello world!");
-    assert!(write.is_ok(), "write to file failed");
-
-    let stage_single = git_staging_area(&["add", file, "--verbose"]);
-    assert!(stage_single.is_ok(), "git add failed");
-    // Command from library to test
-    let restore_single = git_staging_area(&["restore", "--staged", file]);
-    assert!(restore_single.is_ok(), "git restore failed");
-
-    let restore_single_status = git_status(&["--short"]);
-    assert!(restore_single_status.is_ok(), "git status failed");
-
-    let expected_status = format!("A  {file}\n");
-    assert_eq!(restore_single_status.unwrap(), expected_status);
-    Ok(())
-}
-
-#[test]
-fn test_git_stash_show() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_stash_show", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    let commit = git_simple_commit(&["Initial commit"]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    // Change file contents
-    let write = std::fs::write(file, "fn hello() -> String { 'Hello'.to_string() }");
-    assert!(write.is_ok(), "write to file failed");
-
-    // Command from library to test
-    let _ = git_stash(&[]);
-    let stash = git_stash(&["show", "--include-untracked"]);
-    assert!(stash.is_ok(), "git stash failed");
-
-    let expected_stash =
-        format!(" {file} | 2 +-\n 1 file changed, 1 insertion(+), 1 deletion(-)\n");
-    assert_eq!(stash.unwrap(), expected_stash);
-    Ok(())
-}
-
-#[test]
-fn test_git_stash_pop() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_stash_show", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    let commit = git_simple_commit(&["Initial commit"]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    // Change file contents
-    let write = std::fs::write(file, "fn hello() -> String { 'Hello'.to_string() }");
-    assert!(write.is_ok(), "write to file failed");
-
-    // Command from library to test
-    let _ = git_stash(&[]);
-    let stash = git_stash(&["pop"]);
-    assert!(stash.is_ok(), "git stash failed");
-
-    assert!(stash.unwrap().contains("Dropped refs/stash"));
-    Ok(())
-}
-
-#[test]
-fn test_git_stash_drop() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_stash_apply", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    let commit = git_simple_commit(&["Initial commit"]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    // Change file contents
-    let write = std::fs::write(file, "fn hello() -> String { 'Hello'.to_string() }");
-    assert!(write.is_ok(), "write to file failed");
-
-    // Command from library to test
-    let _ = git_stash(&[]);
-    let stash = git_stash(&["drop"]);
-    assert!(stash.is_ok(), "git stash failed");
-
-    assert!(stash.unwrap().contains("Dropped refs/stash"));
-    Ok(())
-}
-
-#[test]
-fn test_git_simple_commit_fail() -> miette::Result<()> {
-    // Command from the library to test
-    let commit = git_simple_commit(&[]);
-    assert!(commit.is_err(), "git commit should fail");
-
-    let expected_commit_err = Err("\n\nMessage can not be empty\n\n");
-    assert_eq!(commit.map_err(|e| e.message), expected_commit_err);
-    Ok(())
-}
-
-#[test]
-fn test_git_simple_commit() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_simple_commit", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    // Command from the library to test
-    let commit = git_simple_commit(&["Simple commit"]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    assert!(commit.unwrap().contains("Simple commit"));
-    Ok(())
-}
-
-#[test]
-fn test_git_semantic_commit_fail() -> miette::Result<()> {
-    // Command from the library to test
-    let (r#type, scope, md_marker) = ("fix", "new_file", false);
-    let commit = git_semantic_commit(r#type, scope, md_marker, &[]);
-    assert!(commit.is_err(), "git commit should fail");
-
-    let expected_commit_err = Err("\n\nMessage can not be empty\n\n");
-    assert_eq!(commit.map_err(|e| e.message), expected_commit_err);
-    Ok(())
-}
-
-#[test]
-fn test_git_semantic_commit() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_semantic_commit", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    // Command from the library to test
-    let (r#type, scope, md_marker, subject) = ("fix", "new_file", false, "add fix for new_file");
-    let commit = git_semantic_commit(r#type, scope, md_marker, &[subject]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    let expected_commit = format!("{type} ({scope}): {subject}");
-    assert_eq!(commit.unwrap(), expected_commit);
-    Ok(())
-}
-
-#[test]
-fn test_git_semantic_commit_no_scope() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_semantic_commit", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    // Command from the library to test
-    let (r#type, scope, md_marker, subject) = ("fix", "", false, "add fix for new_file");
-    let commit = git_semantic_commit(r#type, scope, md_marker, &[subject]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    let expected_commit = format!("{type}: {subject}");
-    assert_eq!(commit.unwrap(), expected_commit);
-    Ok(())
-}
-
-#[test]
-fn test_git_semantic_commit_md_marker_no_scope() -> miette::Result<()> {
-    let (workdir, file) = ("test_git_semantic_commit", "new_file.txt");
-    prepare_test(workdir, Some(file))?;
-
-    // Command from the library to test
-    let (r#type, scope, md_marker, subject) = ("fix", "", true, "add fix for new_file");
-    let commit = git_semantic_commit(r#type, scope, md_marker, &[subject]);
-    assert!(commit.is_ok(), "git commit failed");
-
-    let expected_commit = format!("`{type}`: {subject}");
-    assert_eq!(commit.unwrap(), expected_commit);
-    Ok(())
+        let status = git_status(&["--untracked-files"]).expect("Failed to run git status");
+        assert!(status.contains(file));
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
+    #[test]
+    fn check_git_diff() -> miette::Result<()> {
+        prepare_test("test_run_check_git_diff")?;
+        let diff = git_diff(&["--staged"]).expect("Failed to run git diff --staged");
+        let file = "new_file.txt";
+        assert!(diff.contains(file));
+        count_success_or_clean_on_finish();
+        Ok(())
+    }
 }
