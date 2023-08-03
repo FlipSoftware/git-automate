@@ -3,7 +3,7 @@ use std::process::Output;
 
 use git_automate::*;
 
-// * Typesafe mutable static variable to handle reliable concurrency
+// * Typesafe mutable static variables to reliably handle concurrency
 static TEST_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
 static TEST_LEN: std::sync::OnceLock<std::sync::Mutex<i32>> = std::sync::OnceLock::new();
 
@@ -41,7 +41,7 @@ fn prepare_test(dir_name: &str) -> miette::Result<String> {
         .as_nanos();
     let thread_id = std::thread::current().id();
 
-    // * Initialize a new Git respository with the timestamp for each thread
+    // * Initialize a new Git repository with the timestamp for each thread
     let mut repository = tmp_dir.clone();
     repository.push(format!("{dir_name}_{timestamp}_{thread_id:?}"));
     let repository = repository
@@ -50,7 +50,7 @@ fn prepare_test(dir_name: &str) -> miette::Result<String> {
     let init = git_command_tester(&["init", repository]).expect("Failed to run git init");
     assert!(init.status.success(), "Failed to git init");
 
-    // * Change directory to the initialized repository and create a new file
+    // * Change the directory to the initialized repository and create a new file
     std::env::set_current_dir(repository)
         .expect("Failed to change the current directory to repository");
     let file_name = "new_file.txt";

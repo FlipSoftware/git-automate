@@ -1,4 +1,3 @@
-// Write integration tests for all commands for every possible case exhaustively
 use std::process::Output;
 use fail::Fail;
 
@@ -68,8 +67,8 @@ pub fn git_semantic_commit(
     let subject = &subject[l_offset..r_offset];
 
     let commit_message = match scope.is_empty() {
-        true => format!("`{}`: {}", r#type, subject),
-        false => format!("`{}` (`{}`): {}", r#type, scope, subject),
+        true => format!("`{type}`: {subject}"),
+        false => format!("`{type}` (`{scope}`): {subject}"),
     };
 
     if md_marker {
