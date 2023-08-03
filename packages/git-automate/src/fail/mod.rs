@@ -6,14 +6,14 @@ use std::str::FromStr;
 
 #[derive(Debug)]
 pub enum Fail {
-    GitStatusFail(&'static str),
-    GitLogFail(&'static str),
-    GitDiffFail(&'static str),
-    GitStagingFail(&'static str),
-    GitStashFail(&'static str),
-    GitCommitFail(&'static str),
-    GitSemCommitFail(&'static str),
-    GitBranchFail(&'static str),
+    StatusError(&'static str),
+    LogError(&'static str),
+    DiffError(&'static str),
+    StagingError(&'static str),
+    StashError(&'static str),
+    CommitError(&'static str),
+    SemanticCommitError(&'static str),
+    BranchError(&'static str),
     Other(&'static str),
 }
 
@@ -21,14 +21,14 @@ impl fmt::Display for Fail {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Fail::*;
         match self {
-            GitStatusFail(extra_msg) => write!(f, "Git status failed: {}", extra_msg),
-            GitLogFail(extra_msg) => write!(f, "Git log failed: {}", extra_msg),
-            GitDiffFail(extra_msg) => write!(f, "Git diff failed: {}", extra_msg),
-            GitStagingFail(extra_msg) => write!(f, "Git staging failed: {}", extra_msg),
-            GitStashFail(extra_msg) => write!(f, "Git stash failed: {}", extra_msg),
-            GitCommitFail(extra_msg) => write!(f, "Git commit failed: {}", extra_msg),
-            GitSemCommitFail(extra_msg) => write!(f, "Git semantic commit failed: {}", extra_msg),
-            GitBranchFail(extra_msg) => write!(f, "Git branch failed: {}", extra_msg),
+            StatusError(extra_msg) => write!(f, "Git status failed: {}", extra_msg),
+            LogError(extra_msg) => write!(f, "Git log failed: {}", extra_msg),
+            DiffError(extra_msg) => write!(f, "Git diff failed: {}", extra_msg),
+            StagingError(extra_msg) => write!(f, "Git staging failed: {}", extra_msg),
+            StashError(extra_msg) => write!(f, "Git stash failed: {}", extra_msg),
+            CommitError(extra_msg) => write!(f, "Git commit failed: {}", extra_msg),
+            SemanticCommitError(extra_msg) => write!(f, "Git semantic commit failed: {}", extra_msg),
+            BranchError(extra_msg) => write!(f, "Git branch failed: {}", extra_msg),
             Other(extra_msg) => write!(f, "Error occurred: {}", extra_msg),
         }
     }
