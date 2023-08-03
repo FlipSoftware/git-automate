@@ -67,7 +67,6 @@ fn prepare_test(dir_name: &str) -> miette::Result<String> {
 }
 
 fn clean_up() -> miette::Result<()> {
-    let temp_dir = std::env::temp_dir().display().to_string();
     println!("\t♻ Cleaning directories");
     Ok(())
 }
