@@ -2,4 +2,4 @@
 members = ["packages/git-automate"]
 
 [workspace.dependencies]
-miette = "*"
+miette = "5.10.0"
