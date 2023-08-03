@@ -29,3 +29,13 @@ jobs:
       - run: rustup component add rustfmt
       - uses: actions/checkout@v3
       - run: cargo fmt --all --verbose
+
+  test:
+    if: github.event.pull_request.draft == false
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@v3
+      - run: cargo test -- --show-output

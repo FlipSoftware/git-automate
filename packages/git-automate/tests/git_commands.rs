@@ -157,7 +157,9 @@ mod commit_initial_message {
     #[test]
     fn simple_commit() -> miette::Result<()> {
         prepare_test("test_run_simple_commit")?;
-        let commit = git_simple_commit(&["Initial commit"]).expect("Failed to run simple commit");
+        let commit = git_simple_commit(&["Initial commit", "--dry-run"]) // note: use --dry-run to bypass read-only GitHub Actions
+            .expect("Failed to run simple commit");
+        println!("{commit:?}");
         assert!(commit.contains("Initial commit"));
         count_success_or_clean_on_finish();
         Ok(())
