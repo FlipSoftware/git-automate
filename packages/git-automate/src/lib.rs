@@ -34,6 +34,14 @@ pub fn git_stash(args: &[&str]) -> Result<String, Fail> {
     git_command(&[&["stash"], args].concat())
 }
 
+pub fn git_checkout(args: &[&str]) -> Result<String, Fail> {
+    git_command(&[&["checkout"], args].concat())
+}
+
+pub fn git_branch(args: &[&str]) -> Result<String, Fail> {
+    git_command(&[&["branch"], args].concat())
+}
+
 pub fn git_simple_commit(args: &[&str]) -> Result<String, Fail> {
     if args.is_empty() {
         return Err(Fail::Other("Commit message cannot be empty"));
@@ -69,8 +77,4 @@ pub fn git_semantic_commit(
     } else {
         Ok(commit_message.replace('`', ""))
     }
-}
-
-pub fn git_branch(args: &[&str]) -> Result<String, Fail> {
-    git_command(&[&["branch"], args].concat())
 }
