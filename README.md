@@ -4,13 +4,11 @@
   
 </div>
 
-Git Automate is a powerful and versatile tool designed to streamline and simplify the process of semantically versioning your Git development using the Semantic Versioning (`SemVer`) standard. Whether you prefer to interact through a command-line interface (CLI) or an easy-to-use graphical user interface (GUI), Git Automate offers the best of both worlds.
+Git Automate is a powerful and versatile tool designed to streamline and simplify the process of semantically versioning your `git` development using the Semantic Versioning (`SemVer`) standard. Whether you prefer to interact through a command-line interface (CLI) or an easy-to-use graphical user interface (GUI), Git Automate offers the best of both worlds.
 
-> **Note**
+> [!NOTE]
 > # Purpose
-> Git Automate was born out of a need to streamline my personal development process, making it easier to track changes, identify what impacts my codebase, and improve its overall quality. It has proven invaluable in my own workflow, and I am excited to share it with the community.
->
-> My hope is that Git Automate can provide the same level of assistance and productivity to other developers, enabling them to produce better software and contribute effectively to their own projects or to a large shared codebase.
+> Git Automate helps developers track changes, identify what affects the codebase, and improve its quality. It's all about building better software and contributing to projects in an efficient and meaningful way.
 
 # [Features]()
 
@@ -25,6 +23,8 @@ Git Automate is a powerful and versatile tool designed to streamline and simplif
 - **[Git Integration]()**: Built-in Git integration ensures that versioning is seamlessly integrated into your development workflow.
 
 - **[Release Notes Generation]()**: Git Automate generates comprehensive release notes through the `CHANGELOG` option, summarizing the changes between versions, making communication clear.
+
+- **[DevOps Automation]()**: Choose a DevOps workflow to deploy well-tested software with confidence.
 
 # License
 
